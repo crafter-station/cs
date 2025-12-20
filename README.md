@@ -1,15 +1,39 @@
-# cs
+# crafters
 
-To install dependencies:
+CLI for managing domains on Vercel projects with Spaceship DNS.
 
-```bash
-bun install
-```
-
-To run:
+## Install
 
 ```bash
-bun run index.ts
+bun install -g crafters
 ```
 
-This project was created using `bun init` in bun v1.2.2. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+## Setup
+
+```bash
+crafters login \
+  --spaceshipKey="YOUR_KEY" \
+  --spaceshipSecret="YOUR_SECRET" \
+  --vercelToken="YOUR_TOKEN" \
+  --vercelTeamId="YOUR_TEAM_ID"
+```
+
+## Usage
+
+```bash
+# Add subdomain to project
+crafters domain add myapp -p my-vercel-project
+
+# Remove subdomain
+crafters domain remove myapp -p my-vercel-project
+
+# List all CNAME records
+crafters domain list
+
+# Check current config
+crafters whoami
+```
+
+## License
+
+MIT
