@@ -1,0 +1,14 @@
+{
+  "name": "crafters",
+  "version": "0.0.1",
+  "module": "index.ts",
+  "type": "module",
+  "author": "raillyhugo",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
