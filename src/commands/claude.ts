@@ -90,6 +90,29 @@ async function copyAgents(): Promise<number> {
   return files.length;
 }
 
+async function copySkills(): Promise<number> {
+  const srcDir = join(CLAUDE_DX_PATH, ".claude/skills");
+  const destDir = join(CLAUDE_CONFIG_PATH, "skills");
+
+  if (!(await exists(srcDir))) return 0;
+
+  await mkdir(destDir, { recursive: true });
+
+  const entries = await readdir(srcDir, { withFileTypes: true });
+  let count = 0;
+
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      const srcPath = join(srcDir, entry.name);
+      const destPath = join(destDir, entry.name);
+      await cp(srcPath, destPath, { recursive: true });
+      console.log(`   Copy: ${entry.name}/`);
+      count++;
+    }
+  }
+  return count;
+}
+
 async function mergeSettings(): Promise<void> {
   const srcPath = join(CLAUDE_DX_PATH, ".claude/settings.json");
   const destPath = join(CLAUDE_CONFIG_PATH, "settings.json");
@@ -136,11 +159,14 @@ async function runInstall(force: boolean): Promise<void> {
   console.log("\n3. Installing agents...");
   const agentCount = await copyAgents();
 
-  console.log("\n4. Merging settings...");
+  console.log("\n4. Installing skills...");
+  const skillCount = await copySkills();
+
+  console.log("\n5. Merging settings...");
   await mergeSettings();
 
   console.log(
-    `\nDone! ${copied} commands installed, ${skipped} skipped, ${agentCount} agents installed.`,
+    `\nDone! ${copied} commands, ${agentCount} agents, ${skillCount} skills installed. ${skipped} skipped.`,
   );
   if (skipped > 0 && !force) {
     console.log("Use 'crafters claude update' to overwrite existing commands.\n");
@@ -150,7 +176,7 @@ async function runInstall(force: boolean): Promise<void> {
 export const claudeInstall = defineCommand({
   meta: {
     name: "install",
-    description: "Install Claude Code commands and agents from claude-dx",
+    description: "Install Claude Code commands, agents, and skills from claude-dx",
   },
   args: {
     force: {
@@ -168,7 +194,7 @@ export const claudeInstall = defineCommand({
 export const claudeUpdate = defineCommand({
   meta: {
     name: "update",
-    description: "Update Claude Code commands and agents from claude-dx",
+    description: "Update Claude Code commands, agents, and skills from claude-dx",
   },
   async run() {
     await runInstall(true);
