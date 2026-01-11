@@ -13,7 +13,8 @@ import {
 } from "node:fs/promises";
 
 const CLAUDE_DX_REPO = "crafter-station/claude-dx";
-const CLAUDE_DX_PATH = join(homedir(), "Programming/crafter-station/claude-dx");
+const CRAFTERS_DIR = join(homedir(), ".crafters");
+const CLAUDE_DX_PATH = join(CRAFTERS_DIR, "claude-dx");
 const CLAUDE_CONFIG_PATH = join(homedir(), ".claude");
 
 async function exists(path: string): Promise<boolean> {
@@ -26,6 +27,8 @@ async function exists(path: string): Promise<boolean> {
 }
 
 async function cloneOrPullRepo(): Promise<void> {
+  await mkdir(CRAFTERS_DIR, { recursive: true });
+
   if (await exists(CLAUDE_DX_PATH)) {
     console.log("Updating claude-dx...");
     execSync("git pull", { cwd: CLAUDE_DX_PATH, stdio: "inherit" });

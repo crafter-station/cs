@@ -7,7 +7,7 @@ import { login, logout, whoami } from "./commands/login";
 const main = defineCommand({
   meta: {
     name: "crafters",
-    version: "0.2.0",
+    version: "0.2.1",
     description: "Crafter Station CLI - Domain management and Claude Code configuration",
   },
   subCommands: {
