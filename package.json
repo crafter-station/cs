@@ -1,6 +1,6 @@
 {
   "name": "crafters",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Crafter Station CLI - Domain management and Claude Code configuration",
   "type": "module",
   "author": "raillyhugo",

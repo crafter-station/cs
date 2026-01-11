@@ -12,7 +12,7 @@ bun install -g crafters
 
 ### Claude Code
 
-Sync Claude Code commands and agents from `crafter-station/claude-dx`.
+Sync Claude Code commands, agents, and skills from `crafter-station/claude-dx`.
 
 ```bash
 # First-time install (skips existing commands)
@@ -26,9 +26,10 @@ crafters claude install --force
 ```
 
 **What it does:**
-- Clones/pulls `claude-dx` to `~/Programming/crafter-station/`
+- Clones/pulls `claude-dx` to `~/.crafters/claude-dx`
 - Copies commands to `~/.claude/commands/`
 - Copies agents to `~/.claude/agents/`
+- Copies skills to `~/.claude/skills/`
 - Merges `settings.json` without overwriting existing config
 
 ### Domain Management
