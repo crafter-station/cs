@@ -1,5 +1,7 @@
-import { defineCommand } from "citty";
-import { saveConfig, loadConfig, getConfigPath } from "../lib/config";
+import { defineCommand } from "citty"
+import * as p from "@clack/prompts"
+import pc from "picocolors"
+import { saveConfig, loadConfig, getConfigPath } from "../lib/config"
 
 export const login = defineCommand({
   meta: {
@@ -43,11 +45,11 @@ export const login = defineCommand({
         teamId: args.vercelTeamId,
       },
       baseDomain: args.baseDomain,
-    });
+    })
 
-    console.log(`\n✅ Credentials saved to ${getConfigPath()}\n`);
+    p.log.success(`Credentials saved to ${pc.dim(getConfigPath())}`)
   },
-});
+})
 
 export const logout = defineCommand({
   meta: {
@@ -55,17 +57,17 @@ export const logout = defineCommand({
     description: "Remove stored credentials",
   },
   async run() {
-    const fs = await import("fs/promises");
-    const configPath = getConfigPath();
+    const fs = await import("fs/promises")
+    const configPath = getConfigPath()
 
     try {
-      await fs.unlink(configPath);
-      console.log("\n✅ Credentials removed.\n");
+      await fs.unlink(configPath)
+      p.log.success("Credentials removed.")
     } catch {
-      console.log("\n⚠️  No credentials found.\n");
+      p.log.warning("No credentials found.")
     }
   },
-});
+})
 
 export const whoami = defineCommand({
   meta: {
@@ -73,20 +75,26 @@ export const whoami = defineCommand({
     description: "Show current configuration",
   },
   async run() {
-    const config = await loadConfig();
+    const config = await loadConfig()
 
     if (!config) {
-      console.log("\n⚠️  Not logged in. Run `crafters login` first.\n");
-      return;
+      p.log.warning(`Not logged in. Run ${pc.cyan("crafters login")} first.`)
+      return
     }
 
-    console.log("\n📋 Current Configuration\n");
-    console.log(`   Base Domain: ${config.baseDomain}`);
-    console.log(`   Spaceship API Key: ${config.spaceship.apiKey.slice(0, 8)}...`);
-    console.log(`   Vercel Token: ${config.vercel.token.slice(0, 8)}...`);
+    p.intro(pc.bgCyan(pc.black(" Current Configuration ")))
+
+    p.log.info(`Base Domain:     ${pc.cyan(config.baseDomain)}`)
+    p.log.info(
+      `Spaceship Key:   ${pc.dim(config.spaceship.apiKey.slice(0, 8) + "...")}`
+    )
+    p.log.info(
+      `Vercel Token:    ${pc.dim(config.vercel.token.slice(0, 8) + "...")}`
+    )
     if (config.vercel.teamId) {
-      console.log(`   Vercel Team ID: ${config.vercel.teamId}`);
+      p.log.info(`Vercel Team ID:  ${pc.dim(config.vercel.teamId)}`)
     }
-    console.log(`\n   Config file: ${getConfigPath()}\n`);
+
+    p.outro(`Config: ${pc.dim(getConfigPath())}`)
   },
-});
+})
