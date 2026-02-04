@@ -1,26 +1,7 @@
-import { defineCommand } from "citty";
-import { createSpaceshipClient } from "../lib/spaceship";
-import { createVercelClient } from "../lib/vercel";
-import { loadConfig } from "../lib/config";
-
-async function getConfig() {
-  const fileConfig = await loadConfig();
-
-  const apiKey = process.env.SPACESHIP_API_KEY || fileConfig?.spaceship.apiKey;
-  const apiSecret = process.env.SPACESHIP_API_SECRET || fileConfig?.spaceship.apiSecret;
-  const baseDomain = process.env.BASE_DOMAIN || fileConfig?.baseDomain || "crafter.run";
-  const vercelToken = process.env.VERCEL_TOKEN || fileConfig?.vercel.token;
-  const vercelTeamId = process.env.VERCEL_TEAM_ID || fileConfig?.vercel.teamId;
-
-  if (!apiKey || !apiSecret) {
-    throw new Error("Missing credentials. Run `crafters login` or set SPACESHIP_API_KEY/SPACESHIP_API_SECRET");
-  }
-  if (!vercelToken) {
-    throw new Error("Missing Vercel token. Run `crafters login` or set VERCEL_TOKEN");
-  }
-
-  return { apiKey, apiSecret, baseDomain, vercelToken, vercelTeamId };
-}
+import { defineCommand } from "citty"
+import * as p from "@clack/prompts"
+import pc from "picocolors"
+import { resolveConfig, addDomain, removeDomain, listDomains } from "../lib/domain-ops"
 
 export const domainAdd = defineCommand({
   meta: {
@@ -41,39 +22,24 @@ export const domainAdd = defineCommand({
     },
   },
   async run({ args }) {
-    const config = await getConfig();
-    const fullDomain = `${args.subdomain}.${config.baseDomain}`;
+    p.intro(pc.bgMagenta(pc.black(" domain add ")))
 
-    console.log(`\n🚀 Adding domain: ${fullDomain}`);
-    console.log(`   Project: ${args.project}\n`);
+    const config = await resolveConfig()
+    const fullDomain = `${args.subdomain}.${config.baseDomain}`
 
-    const spaceship = createSpaceshipClient({
-      apiKey: config.apiKey,
-      apiSecret: config.apiSecret,
-      baseDomain: config.baseDomain,
-    });
+    p.log.info(`Domain: ${pc.cyan(fullDomain)}`)
+    p.log.info(`Project: ${pc.cyan(args.project)}`)
 
-    const vercel = createVercelClient({
-      token: config.vercelToken,
-      teamId: config.vercelTeamId,
-    });
+    const s = p.spinner()
+    s.start("Adding domain to Vercel and configuring DNS")
+    const result = await addDomain(config, args.subdomain, args.project)
+    s.stop(`CNAME configured: ${pc.dim(result.recommendedCNAME)}`)
 
-    console.log("1. Adding domain to Vercel project...");
-    await vercel.addDomainToProject(args.project, fullDomain);
-    console.log("   ✓ Domain added to Vercel");
-
-    console.log("2. Getting recommended CNAME from Vercel...");
-    const recommendedCNAME = await vercel.getRecommendedCNAME(fullDomain);
-    console.log(`   ✓ Recommended: ${recommendedCNAME}`);
-
-    console.log("3. Creating CNAME record in Spaceship...");
-    await spaceship.addCNAME(args.subdomain, recommendedCNAME);
-    console.log(`   ✓ CNAME record created → ${recommendedCNAME}`);
-
-    console.log(`\n✅ Done! ${fullDomain} is now configured.`);
-    console.log("   SSL certificate will be issued automatically.\n");
+    p.outro(
+      `${pc.green(result.fullDomain)} is now configured. SSL will be issued automatically.`
+    )
   },
-});
+})
 
 export const domainRemove = defineCommand({
   meta: {
@@ -94,34 +60,22 @@ export const domainRemove = defineCommand({
     },
   },
   async run({ args }) {
-    const config = await getConfig();
-    const fullDomain = `${args.subdomain}.${config.baseDomain}`;
+    p.intro(pc.bgRed(pc.black(" domain remove ")))
 
-    console.log(`\n🗑️  Removing domain: ${fullDomain}`);
-    console.log(`   Project: ${args.project}\n`);
+    const config = await resolveConfig()
+    const fullDomain = `${args.subdomain}.${config.baseDomain}`
 
-    const spaceship = createSpaceshipClient({
-      apiKey: config.apiKey,
-      apiSecret: config.apiSecret,
-      baseDomain: config.baseDomain,
-    });
+    p.log.info(`Domain: ${pc.cyan(fullDomain)}`)
+    p.log.info(`Project: ${pc.cyan(args.project)}`)
 
-    const vercel = createVercelClient({
-      token: config.vercelToken,
-      teamId: config.vercelTeamId,
-    });
+    const s = p.spinner()
+    s.start("Removing domain from Vercel and DNS")
+    const result = await removeDomain(config, args.subdomain, args.project)
+    s.stop("Domain and DNS records removed")
 
-    console.log("1. Removing domain from Vercel project...");
-    await vercel.removeDomainFromProject(args.project, fullDomain);
-    console.log("   ✓ Domain removed from Vercel");
-
-    console.log("2. Removing CNAME record from Spaceship...");
-    await spaceship.removeCNAME(args.subdomain);
-    console.log("   ✓ CNAME record removed");
-
-    console.log(`\n✅ Done! ${fullDomain} has been removed.\n`);
+    p.outro(`${pc.yellow(result.fullDomain)} has been removed.`)
   },
-});
+})
 
 export const domainList = defineCommand({
   meta: {
@@ -129,31 +83,28 @@ export const domainList = defineCommand({
     description: "List all configured subdomains",
   },
   async run() {
-    const config = await getConfig();
+    p.intro(pc.bgCyan(pc.black(" domain list ")))
 
-    console.log(`\n📋 Listing DNS records for ${config.baseDomain}\n`);
+    const config = await resolveConfig()
 
-    const spaceship = createSpaceshipClient({
-      apiKey: config.apiKey,
-      apiSecret: config.apiSecret,
-      baseDomain: config.baseDomain,
-    });
+    const s = p.spinner()
+    s.start("Fetching DNS records")
+    const { records, baseDomain } = await listDomains(config)
+    s.stop(`Found ${records.length} CNAME record(s)`)
 
-    const records = await spaceship.listRecords();
-    const cnameRecords = records.items.filter((r) => r.type === "CNAME");
-
-    if (cnameRecords.length === 0) {
-      console.log("   No CNAME records found.\n");
-      return;
+    if (records.length === 0) {
+      p.log.warning("No CNAME records found.")
+    } else {
+      for (const record of records) {
+        p.log.info(
+          `${pc.cyan(record.name + "." + baseDomain)} ${pc.dim("->")} ${pc.dim(record.cname ?? "")}`
+        )
+      }
     }
 
-    console.log("CNAME Records:");
-    for (const record of cnameRecords) {
-      console.log(`   ${record.name}.${config.baseDomain} → ${record.cname}`);
-    }
-    console.log(`\nTotal: ${cnameRecords.length} record(s)\n`);
+    p.outro(`${pc.dim(baseDomain)} - ${records.length} record(s)`)
   },
-});
+})
 
 export const domain = defineCommand({
   meta: {
@@ -165,4 +116,4 @@ export const domain = defineCommand({
     remove: domainRemove,
     list: domainList,
   },
-});
+})

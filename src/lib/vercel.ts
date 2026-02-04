@@ -63,12 +63,27 @@ export function createVercelClient(config: VercelConfig) {
   }
 
   async function listProjectDomains(projectSlug: string) {
-    const project = await client.projects.getProject({
+    const result = await client.projects.getProjectDomains({
       idOrName: projectSlug,
       teamId: config.teamId,
     });
 
-    return project;
+    return result;
+  }
+
+  async function listProjects(search?: string) {
+    const result = await client.projects.getProjects({
+      teamId: config.teamId,
+      ...(search ? { search } : {}),
+      limit: "50",
+    });
+
+    return result.projects.map((p) => ({
+      id: p.id,
+      name: p.name,
+      framework: p.framework ?? null,
+      updatedAt: p.updatedAt ?? null,
+    }));
   }
 
   return {
@@ -78,6 +93,7 @@ export function createVercelClient(config: VercelConfig) {
     getRecommendedCNAME,
     verifyDomain,
     listProjectDomains,
+    listProjects,
     client,
   };
 }
