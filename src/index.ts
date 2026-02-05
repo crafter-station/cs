@@ -19,7 +19,7 @@ const hasSubCommand = process.argv
 const main = defineCommand({
   meta: {
     name: "crafters",
-    version: "0.2.2",
+    version: "0.3.1",
     description:
       "Crafter Station CLI - Domain management and Claude Code configuration",
   },
