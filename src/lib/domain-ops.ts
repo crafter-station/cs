@@ -55,28 +55,6 @@ export function detectVercelProject(cwd = process.cwd()): string | null {
   return null
 }
 
-export function detectClerk(cwd = process.cwd()): boolean {
-  // Check package.json for @clerk/*
-  const pkgPath = join(cwd, "package.json")
-  if (existsSync(pkgPath)) {
-    try {
-      const pkg = readFileSync(pkgPath, "utf-8")
-      if (pkg.includes('"@clerk/')) return true
-    } catch {}
-  }
-
-  // Check .env.local for CLERK_SECRET_KEY
-  const envPath = join(cwd, ".env.local")
-  if (existsSync(envPath)) {
-    try {
-      const env = readFileSync(envPath, "utf-8")
-      if (env.includes("CLERK_SECRET_KEY=")) return true
-    } catch {}
-  }
-
-  return false
-}
-
 export function detectProjectName(cwd = process.cwd()): string | null {
   const pkgPath = join(cwd, "package.json")
   if (existsSync(pkgPath)) {
@@ -115,33 +93,82 @@ export async function addDomain(
   return { fullDomain, recommendedCNAME }
 }
 
-export async function addClerkDomain(
+export interface ClerkDomainResult {
+  name: string
+  frontendApiUrl: string
+  cnameTargets: Array<{ host: string; value: string }>
+}
+
+/**
+ * Register a secondary application domain on a Clerk production instance
+ * and pipe the 5 CNAMEs to Spaceship DNS.
+ *
+ * Uses `POST /v1/instance/change_domain` with `is_secondary: true`.
+ * This is NOT satellite (premium) - it uses suffixed cookies so multiple
+ * Clerk apps can share the same root domain (e.g. a.crafter.run + b.crafter.run).
+ */
+export async function setupClerkDomain(
   config: ResolvedConfig,
-  fullDomain: string
-): Promise<{ cnameTargets: Array<{ host: string; value: string }> }> {
-  const { execSync } = await import("node:child_process")
-
-  const output = execSync(
-    `clerk domains add --name ${fullDomain} --dotenv -o json`,
-    { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
-  )
-  const data = JSON.parse(output)
-  const cnameTargets: Array<{ host: string; value: string }> = data.cname_targets ?? []
-
-  if (cnameTargets.length > 0) {
-    const spaceship = createSpaceshipClient({
-      apiKey: config.apiKey,
-      apiSecret: config.apiSecret,
-      baseDomain: config.baseDomain,
-    })
-
-    for (const cname of cnameTargets) {
-      const sub = cname.host.replace(`.${config.baseDomain}`, "")
-      await spaceship.addCNAME(sub, cname.value)
-    }
+  fullDomain: string,
+  clerkSecretKey: string
+): Promise<ClerkDomainResult> {
+  const baseUrl = "https://api.clerk.com/v1"
+  const headers = {
+    Authorization: `Bearer ${clerkSecretKey}`,
+    "Content-Type": "application/json",
   }
 
-  return { cnameTargets }
+  // Step 1: Change primary domain to our subdomain as secondary
+  const changeRes = await fetch(`${baseUrl}/instance/change_domain`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      home_url: `https://${fullDomain}`,
+      is_secondary: true,
+    }),
+  })
+  if (!changeRes.ok) {
+    const err = await changeRes.json()
+    throw new Error(
+      err.errors?.[0]?.long_message ?? `Failed to change domain: ${changeRes.status}`
+    )
+  }
+
+  // Step 2: Read the domain to get CNAME targets
+  const domainsRes = await fetch(`${baseUrl}/domains`, { headers })
+  if (!domainsRes.ok) {
+    throw new Error(`Failed to read domains: ${domainsRes.status}`)
+  }
+  const domainsData = (await domainsRes.json()) as {
+    data: Array<{
+      name: string
+      frontend_api_url: string
+      cname_targets: Array<{ host: string; value: string }>
+    }>
+  }
+
+  const domain = domainsData.data.find((d) => d.name === fullDomain)
+  if (!domain) {
+    throw new Error(`Domain ${fullDomain} not found after change_domain`)
+  }
+
+  // Step 3: Pipe all CNAMEs to Spaceship DNS
+  const spaceship = createSpaceshipClient({
+    apiKey: config.apiKey,
+    apiSecret: config.apiSecret,
+    baseDomain: config.baseDomain,
+  })
+
+  for (const cname of domain.cname_targets) {
+    const sub = cname.host.replace(`.${config.baseDomain}`, "")
+    await spaceship.addCNAME(sub, cname.value)
+  }
+
+  return {
+    name: domain.name,
+    frontendApiUrl: domain.frontend_api_url,
+    cnameTargets: domain.cname_targets,
+  }
 }
 
 export async function addDomainDNSOnly(
