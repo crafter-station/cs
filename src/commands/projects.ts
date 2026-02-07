@@ -127,12 +127,19 @@ export const projectsSync = defineCommand({
     const path = await import("path");
 
     if (!args.output) {
+      const fs = await import("fs/promises");
       const siteConfig = fileConfig?.sites?.[config.baseDomain];
       if (siteConfig?.repo) {
         const dataPath = siteConfig.dataPath || "data/projects.json";
         args.output = path.resolve(siteConfig.repo, dataPath);
       } else {
-        args.output = path.resolve("./projects.json");
+        const sibling = path.resolve(process.cwd(), `../${config.baseDomain}`);
+        try {
+          await fs.access(path.join(sibling, "package.json"));
+          args.output = path.resolve(sibling, "data/projects.json");
+        } catch {
+          args.output = path.resolve("./projects.json");
+        }
       }
     }
 
