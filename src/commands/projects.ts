@@ -117,12 +117,24 @@ export const projectsSync = defineCommand({
     output: {
       type: "string",
       alias: "o",
-      description: "Output file path for projects.json",
-      default: "./projects.json",
+      description: "Output file path for projects.json (auto-detected from ~/.crafters/config.json)",
     },
   },
   async run({ args }) {
     const config = await getConfig();
+    const fileConfig = await loadConfig();
+
+    const path = await import("path");
+
+    if (!args.output) {
+      const siteConfig = fileConfig?.sites?.[config.baseDomain];
+      if (siteConfig?.repo) {
+        const dataPath = siteConfig.dataPath || "data/projects.json";
+        args.output = path.resolve(siteConfig.repo, dataPath);
+      } else {
+        args.output = path.resolve("./projects.json");
+      }
+    }
 
     console.log(`\nSyncing projects for ${config.baseDomain}...\n`);
 
@@ -318,7 +330,6 @@ export const projectsSync = defineCommand({
     };
 
     const fs = await import("fs/promises");
-    const path = await import("path");
 
     const outputPath = path.resolve(args.output);
     const outputDir = path.dirname(outputPath);

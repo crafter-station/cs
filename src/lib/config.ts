@@ -14,6 +14,12 @@ export interface CraftersConfig {
     teamId?: string;
   };
   baseDomain: string;
+  sites?: {
+    [domain: string]: {
+      repo: string;
+      dataPath?: string;
+    };
+  };
 }
 
 export async function saveConfig(config: CraftersConfig): Promise<void> {
