@@ -3,10 +3,12 @@ import { defineCommand, runMain } from "citty";
 import { claude } from "./commands/claude";
 import { domain } from "./commands/domain";
 import { login, logout, whoami } from "./commands/login";
+import { projects } from "./commands/projects";
 
 const subCommands = {
   claude,
   domain,
+  projects,
   login,
   logout,
   whoami,

@@ -86,6 +86,14 @@ export function createVercelClient(config: VercelConfig) {
     }));
   }
 
+  async function listAllProjects() {
+    const result = await client.projects.getProjects({
+      teamId: config.teamId,
+      limit: "100",
+    });
+    return result;
+  }
+
   return {
     addDomainToProject,
     removeDomainFromProject,
@@ -94,6 +102,7 @@ export function createVercelClient(config: VercelConfig) {
     verifyDomain,
     listProjectDomains,
     listProjects,
+    listAllProjects,
     client,
   };
 }

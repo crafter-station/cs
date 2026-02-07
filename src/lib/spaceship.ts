@@ -43,7 +43,7 @@ export function createSpaceshipClient(config: SpaceshipConfig) {
     return { success: true, subdomain, target };
   }
 
-  async function removeCNAME(subdomain: string) {
+  async function removeCNAME(subdomain: string, target = "cname.vercel-dns.com") {
     const response = await fetch(
       `${SPACESHIP_API_URL}/dns/records/${config.baseDomain}`,
       {
@@ -53,7 +53,7 @@ export function createSpaceshipClient(config: SpaceshipConfig) {
           {
             type: "CNAME",
             name: subdomain,
-            cname: "cname.vercel-dns.com",
+            cname: target,
           },
         ]),
       }
