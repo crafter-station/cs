@@ -178,10 +178,14 @@ export const agentInstallDaemon = defineCommand({
 
     const s = p.spinner();
 
+    s.start("Detecting bun path");
+    const { execSync } = await import("node:child_process");
+    const bunPath = execSync("which bun", { encoding: "utf-8" }).trim();
+    s.stop(`Using ${bunPath}`);
+
     s.start("Installing launchd agent");
-    const binaryPath = `${process.env.HOME}/.local/bin/bun`;
     const scriptPath = `${process.env.HOME}/Programming/crafter-station/kai/packages/executor/daemon.ts`;
-    installLaunchdAgent(`${binaryPath} run ${scriptPath}`);
+    installLaunchdAgent([bunPath, "run", scriptPath]);
     s.stop("Launchd plist installed");
 
     const plistPath = getLaunchdPlistPath();

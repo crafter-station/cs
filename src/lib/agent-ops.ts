@@ -118,7 +118,8 @@ export function isExecutorInstalled(): boolean {
 const PLIST_NAME = "com.crafter.kai-executor";
 const PLIST_PATH = join(homedir(), "Library", "LaunchAgents", `${PLIST_NAME}.plist`);
 
-export function generateLaunchdPlist(binaryPath: string): string {
+export function generateLaunchdPlist(args: string[]): string {
+  const argsXml = args.map((a) => `    <string>${a}</string>`).join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -127,7 +128,7 @@ export function generateLaunchdPlist(binaryPath: string): string {
   <string>${PLIST_NAME}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${binaryPath}</string>
+${argsXml}
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -146,8 +147,8 @@ export function generateLaunchdPlist(binaryPath: string): string {
 </plist>`;
 }
 
-export function installLaunchdAgent(binaryPath: string) {
-  const plist = generateLaunchdPlist(binaryPath);
+export function installLaunchdAgent(args: string[]) {
+  const plist = generateLaunchdPlist(args);
   writeFileSync(PLIST_PATH, plist);
 }
 
