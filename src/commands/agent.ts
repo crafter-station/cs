@@ -123,14 +123,14 @@ export const agentSetup = defineCommand({
     });
     if (p.isCancel(memberId)) return;
 
-    const token = await p.text({
-      message: "Your executor token (provided by Hunter):",
-      placeholder: "paste token here",
+    const secret = await p.text({
+      message: "Team secret (provided by Hunter):",
+      placeholder: "paste secret here",
       validate(value) {
         if (!value) return "Required";
       },
     });
-    if (p.isCancel(token)) return;
+    if (p.isCancel(secret)) return;
 
     const centralUrl = await p.text({
       message: "Central server WebSocket URL:",
@@ -143,7 +143,7 @@ export const agentSetup = defineCommand({
     s.start("Saving configuration");
     saveExecutorConfig({
       memberId: memberId as string,
-      token: token as string,
+      secret: secret as string,
       centralUrl: centralUrl as string,
       workspacesRoot: `${process.env.HOME}/kai-workspaces`,
     });

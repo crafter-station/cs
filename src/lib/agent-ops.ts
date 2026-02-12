@@ -83,7 +83,7 @@ export function getAgentInfo(name: string): AgentInfo | null {
 
 export interface ExecutorConfig {
   memberId: string;
-  token: string;
+  secret: string;
   centralUrl: string;
   workspacesRoot: string;
 }
