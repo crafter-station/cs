@@ -1,11 +1,13 @@
 #!/usr/bin/env bun
 import { defineCommand, runMain } from "citty";
+import { agent } from "./commands/agent";
 import { claude } from "./commands/claude";
 import { domain } from "./commands/domain";
 import { login, logout, whoami } from "./commands/login";
 import { projects } from "./commands/projects";
 
 const subCommands = {
+  agent,
   claude,
   domain,
   projects,
