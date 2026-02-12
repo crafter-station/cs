@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev": "bun run src/index.ts",
-    "build": "bun build src/index.ts --compile --outfile crafters"
+    "build": "bun run build.ts"
   },
   "dependencies": {
     "@clack/prompts": "^1.0.0-alpha.1",
