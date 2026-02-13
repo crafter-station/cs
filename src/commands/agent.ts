@@ -13,6 +13,7 @@ import {
   isLaunchdInstalled,
   runDoctorChecks,
   startDaemon,
+  refreshLinearTokens,
 } from "../lib/agent-ops";
 import { installClaudeDx } from "../lib/claude-ops";
 
@@ -159,6 +160,10 @@ export const agentSetup = defineCommand({
     s.start("Syncing agents from claude-dx");
     const dxResult = await installClaudeDx(true);
     s.stop(`${dxResult.agents.length} agents, ${dxResult.commands.copied.length} commands, ${dxResult.skills.length} skills synced`);
+
+    s.start("Refreshing Linear agent tokens");
+    const tokenResult = refreshLinearTokens();
+    s.stop(tokenResult.success ? "Linear tokens refreshed" : "Token refresh skipped (no credentials yet)");
 
     s.start("Installing launchd daemon");
     const { execSync } = await import("node:child_process");
