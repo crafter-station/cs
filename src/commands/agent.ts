@@ -11,7 +11,10 @@ import {
   installLaunchdAgent,
   getLaunchdPlistPath,
   isLaunchdInstalled,
+  runDoctorChecks,
+  startDaemon,
 } from "../lib/agent-ops";
+import { installClaudeDx } from "../lib/claude-ops";
 
 const PILLAR_COLORS: Record<string, (s: string) => string> = {
   engineering: pc.blue,
@@ -98,7 +101,7 @@ export const agentInfo = defineCommand({
 export const agentSetup = defineCommand({
   meta: {
     name: "setup",
-    description: "Configure the Kai executor daemon",
+    description: "Full setup: config + agents + daemon (one command)",
   },
   async run() {
     p.intro(pc.bgCyan(pc.black(" Kai Executor Setup ")));
@@ -151,15 +154,29 @@ export const agentSetup = defineCommand({
 
     s.start("Creating workspaces directory");
     ensureWorkspacesDir();
-    s.stop("~/kai-workspaces/ created");
+    s.stop("~/kai-workspaces/ ready");
 
-    p.log.info(pc.dim("To start the executor daemon:"));
-    p.log.info(pc.bold("  bun run ~/Programming/crafter-station/kai/packages/executor/daemon.ts"));
+    s.start("Syncing agents from claude-dx");
+    const dxResult = await installClaudeDx(true);
+    s.stop(`${dxResult.agents.length} agents, ${dxResult.commands.copied.length} commands, ${dxResult.skills.length} skills synced`);
+
+    s.start("Installing launchd daemon");
+    const { execSync } = await import("node:child_process");
+    const bunPath = execSync("which bun", { encoding: "utf-8" }).trim();
+    const scriptPath = `${process.env.HOME}/Programming/crafter-station/kai/packages/executor/daemon.ts`;
+    installLaunchdAgent([bunPath, "run", scriptPath]);
+    s.stop("Daemon installed");
+
+    s.start("Starting executor");
+    startDaemon();
+    await new Promise((r) => setTimeout(r, 3000));
+    s.stop("Executor started");
+
     p.log.info("");
-    p.log.info(pc.dim("Or install as launchd agent (auto-start on login):"));
-    p.log.info(pc.bold("  crafters agent install-daemon"));
+    p.log.info(`Verify: ${pc.bold("crafters agent doctor")}`);
+    p.log.info(`Logs:   ${pc.bold("tail -f ~/.kai-executor/stdout.log")}`);
 
-    p.outro(pc.green("Setup complete"));
+    p.outro(pc.green("Setup complete — executor is running"));
   },
 });
 
@@ -226,6 +243,57 @@ export const agentStatus = defineCommand({
   },
 });
 
+export const agentDoctor = defineCommand({
+  meta: {
+    name: "doctor",
+    description: "Diagnose executor health and auto-fix issues",
+  },
+  args: {
+    fix: {
+      type: "boolean",
+      description: "Auto-fix fixable issues",
+      default: false,
+    },
+  },
+  async run({ args }) {
+    p.intro(pc.bgCyan(pc.black(" Kai Doctor ")));
+
+    const checks = runDoctorChecks();
+    let issues = 0;
+    let fixed = 0;
+
+    const icon = (status: "pass" | "fail" | "warn") =>
+      status === "pass" ? pc.green("✓") : status === "fail" ? pc.red("✗") : pc.yellow("!");
+
+    for (const check of checks) {
+      const detail = check.detail ? pc.dim(` ${check.detail}`) : "";
+      p.log.info(`${icon(check.status)} ${pc.bold(check.label)}${detail}`);
+
+      if (check.status === "fail") {
+        issues++;
+        if (args.fix && check.fix) {
+          check.fix();
+          fixed++;
+          p.log.info(`  ${pc.cyan("↻")} fixed`);
+        }
+      }
+    }
+
+    if (issues === 0) {
+      p.outro(pc.green("All checks passed"));
+    } else if (args.fix && fixed > 0) {
+      const remaining = issues - fixed;
+      p.outro(
+        remaining > 0
+          ? `${pc.cyan(`Fixed ${fixed} issue(s).`)} ${pc.yellow(`${remaining} remaining.`)}`
+          : pc.green(`Fixed ${fixed} issue(s).`)
+      );
+    } else {
+      p.outro(`${pc.red(`${issues} issue(s) found.`)} Run with ${pc.cyan("--fix")} to auto-heal.`);
+    }
+  },
+});
+
 export const agent = defineCommand({
   meta: {
     name: "agent",
@@ -236,6 +304,7 @@ export const agent = defineCommand({
     info: agentInfo,
     setup: agentSetup,
     status: agentStatus,
+    doctor: agentDoctor,
     "install-daemon": agentInstallDaemon,
   },
 });
