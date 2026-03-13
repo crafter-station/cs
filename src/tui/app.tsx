@@ -8,6 +8,7 @@ import { ConfigProvider } from "./context/config"
 import { DialogProvider } from "./context/dialog"
 import { Home } from "./screens/home"
 import { Domains } from "./screens/domains"
+import { ClerkScreen } from "./screens/clerk"
 import { ClaudeConfig } from "./screens/claude-config"
 import { Credentials } from "./screens/credentials"
 
@@ -39,6 +40,9 @@ function App() {
         </Match>
         <Match when={route.data.type === "domains"}>
           <Domains />
+        </Match>
+        <Match when={route.data.type === "clerk"}>
+          <ClerkScreen />
         </Match>
         <Match when={route.data.type === "claude"}>
           <ClaudeConfig />

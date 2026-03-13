@@ -14,6 +14,11 @@ const MENU_ITEMS: MenuItem[] = [
     value: "domains",
   },
   {
+    label: "Clerk",
+    description: "Manage Clerk Platform applications",
+    value: "clerk",
+  },
+  {
     label: "Claude Config",
     description: "Install/update Claude Code configuration",
     value: "claude",
@@ -45,6 +50,9 @@ export function Home() {
     switch (item.value) {
       case "domains":
         route.navigate({ type: "domains" })
+        break
+      case "clerk":
+        route.navigate({ type: "clerk" })
         break
       case "claude":
         route.navigate({ type: "claude" })
