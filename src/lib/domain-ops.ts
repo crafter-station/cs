@@ -10,6 +10,7 @@ export interface ResolvedConfig {
   baseDomain: string
   vercelToken: string
   vercelTeamId?: string
+  clerkPlatformToken?: string
 }
 
 export async function resolveConfig(): Promise<ResolvedConfig> {
@@ -22,6 +23,7 @@ export async function resolveConfig(): Promise<ResolvedConfig> {
     process.env.BASE_DOMAIN || fileConfig?.baseDomain || "crafter.run"
   const vercelToken = process.env.VERCEL_TOKEN || fileConfig?.vercel.token
   const vercelTeamId = process.env.VERCEL_TEAM_ID || fileConfig?.vercel.teamId
+  const clerkPlatformToken = process.env.CLERK_PLATFORM_TOKEN || fileConfig?.clerk?.platformToken
 
   if (!apiKey || !apiSecret) {
     throw new Error(
@@ -34,7 +36,7 @@ export async function resolveConfig(): Promise<ResolvedConfig> {
     )
   }
 
-  return { apiKey, apiSecret, baseDomain, vercelToken, vercelTeamId }
+  return { apiKey, apiSecret, baseDomain, vercelToken, vercelTeamId, clerkPlatformToken }
 }
 
 // --- Detection helpers ---

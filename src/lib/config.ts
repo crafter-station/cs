@@ -20,6 +20,9 @@ export interface CraftersConfig {
       dataPath?: string;
     };
   };
+  clerk?: {
+    platformToken: string;
+  };
 }
 
 export async function saveConfig(config: CraftersConfig): Promise<void> {
