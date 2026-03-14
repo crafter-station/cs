@@ -33,8 +33,13 @@ export const login = defineCommand({
       description: "Base domain (default: crafter.run)",
       default: "crafter.run",
     },
+    clerkPlatformToken: {
+      type: "string",
+      description: "Clerk Platform API token",
+    },
   },
   async run({ args }) {
+    const existing = await loadConfig()
     await saveConfig({
       spaceship: {
         apiKey: args.spaceshipKey,
@@ -45,6 +50,10 @@ export const login = defineCommand({
         teamId: args.vercelTeamId,
       },
       baseDomain: args.baseDomain,
+      sites: existing?.sites,
+      clerk: args.clerkPlatformToken
+        ? { platformToken: args.clerkPlatformToken }
+        : existing?.clerk,
     })
 
     p.log.success(`Credentials saved to ${pc.dim(getConfigPath())}`)
@@ -93,6 +102,11 @@ export const whoami = defineCommand({
     )
     if (config.vercel.teamId) {
       p.log.info(`Vercel Team ID:  ${pc.dim(config.vercel.teamId)}`)
+    }
+    if (config.clerk?.platformToken) {
+      p.log.info(
+        `Clerk Platform:  ${pc.dim(config.clerk.platformToken.slice(0, 8) + "...")}`
+      )
     }
 
     p.outro(`Config: ${pc.dim(getConfigPath())}`)

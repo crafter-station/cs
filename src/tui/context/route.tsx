@@ -4,6 +4,7 @@ import { createSimpleContext } from "./helper"
 export type Route =
   | { type: "home" }
   | { type: "domains" }
+  | { type: "clerk" }
   | { type: "claude" }
   | { type: "credentials" }
 

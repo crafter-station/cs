@@ -2,6 +2,7 @@
 import { defineCommand, runMain } from "citty";
 import { agent } from "./commands/agent";
 import { claude } from "./commands/claude";
+import { clerk } from "./commands/clerk";
 import { domain } from "./commands/domain";
 import { login, logout, whoami } from "./commands/login";
 import { projects } from "./commands/projects";
@@ -9,6 +10,7 @@ import { projects } from "./commands/projects";
 const subCommands = {
   agent,
   claude,
+  clerk,
   domain,
   projects,
   login,
