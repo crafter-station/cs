@@ -191,6 +191,46 @@ export async function addDomainDNSOnly(
   return { fullDomain, target }
 }
 
+export async function addDomainARecord(
+  config: ResolvedConfig,
+  subdomain: string,
+  ip: string
+): Promise<{ fullDomain: string; ip: string }> {
+  const fullDomain = `${subdomain}.${config.baseDomain}`
+
+  const spaceship = createSpaceshipClient({
+    apiKey: config.apiKey,
+    apiSecret: config.apiSecret,
+    baseDomain: config.baseDomain,
+  })
+
+  await spaceship.addA(subdomain, ip)
+
+  return { fullDomain, ip }
+}
+
+export async function removeDomainDNSOnly(
+  config: ResolvedConfig,
+  subdomain: string,
+  record: { type: string; cname?: string; address?: string }
+): Promise<{ fullDomain: string }> {
+  const fullDomain = `${subdomain}.${config.baseDomain}`
+
+  const spaceship = createSpaceshipClient({
+    apiKey: config.apiKey,
+    apiSecret: config.apiSecret,
+    baseDomain: config.baseDomain,
+  })
+
+  if (record.type === "A" && record.address) {
+    await spaceship.removeA(subdomain, record.address)
+  } else if (record.type === "CNAME") {
+    await spaceship.removeCNAME(subdomain, record.cname)
+  }
+
+  return { fullDomain }
+}
+
 export async function removeDomain(
   config: ResolvedConfig,
   subdomain: string,
@@ -237,7 +277,7 @@ export async function listProjects(
 export async function listDomains(
   config: ResolvedConfig
 ): Promise<{
-  records: Array<{ type: string; name: string; cname?: string; ttl: number }>
+  records: Array<{ type: string; name: string; cname?: string; address?: string; ttl: number }>
   baseDomain: string
 }> {
   const spaceship = createSpaceshipClient({
@@ -247,7 +287,7 @@ export async function listDomains(
   })
 
   const result = await spaceship.listRecords()
-  const records = result.items.filter((r) => r.type === "CNAME")
+  const records = result.items.filter((r) => r.type === "CNAME" || r.type === "A")
 
   return { records, baseDomain: config.baseDomain }
 }

@@ -12,7 +12,9 @@ import {
   listDomains,
   listProjects,
   addDomain,
-  removeDomain,
+  addDomainDNSOnly,
+  addDomainARecord,
+  removeDomainDNSOnly,
   type ResolvedConfig,
   type VercelProject,
 } from "../../lib/domain-ops"
@@ -21,6 +23,7 @@ interface DomainRecord {
   type: string
   name: string
   cname?: string
+  address?: string
   ttl: number
 }
 
@@ -92,7 +95,7 @@ export function Domains() {
       const record = recs[selected()]
       dialog.replace(() => (
         <ConfirmRemove
-          subdomain={record.name}
+          record={record}
           baseDomain={baseDomain()}
           config={config()!}
           onDone={loadDomains}
@@ -122,11 +125,12 @@ export function Domains() {
         >
           <Show
             when={records().length > 0}
-            fallback={<text fg={theme.textMuted}>No CNAME records found. Press 'a' to add one.</text>}
+            fallback={<text fg={theme.textMuted}>No DNS records found. Press 'a' to add one.</text>}
           >
             <For each={records()}>
               {(record, index) => {
                 const isSelected = () => index() === selected()
+                const target = () => record.type === "A" ? record.address : record.cname
                 return (
                   <box
                     flexDirection="row"
@@ -138,11 +142,14 @@ export function Domains() {
                     <text fg={isSelected() ? theme.primary : theme.textMuted}>
                       {isSelected() ? ">" : " "}
                     </text>
+                    <text fg={record.type === "A" ? theme.accent : theme.info}>
+                      {record.type.padEnd(5)}
+                    </text>
                     <text fg={isSelected() ? theme.secondary : theme.text}>
                       {record.name}.{baseDomain()}
                     </text>
                     <text fg={theme.textMuted}>{"→"}</text>
-                    <text fg={theme.textMuted}>{record.cname ?? ""}</text>
+                    <text fg={theme.textMuted}>{target() ?? ""}</text>
                   </box>
                 )
               }}
@@ -158,15 +165,28 @@ export function Domains() {
   )
 }
 
+const RECORD_TYPES = [
+  { value: "vercel" as const, label: "Vercel (CNAME)", desc: "Add to Vercel project" },
+  { value: "cname" as const, label: "CNAME (custom)", desc: "Custom CNAME target" },
+  { value: "a" as const, label: "A (IP address)", desc: "Point to IP / VPS" },
+]
+
+type RecordType = "vercel" | "cname" | "a"
+type AddStep = "type" | "subdomain" | "loading" | "project" | "ip" | "target" | "adding" | "done"
+
 function AddDomainForm(props: {
   onDone: () => void
   config: ResolvedConfig
 }) {
   const dialog = useDialog()
   const toast = useToast()
+  const [recordType, setRecordType] = createSignal<RecordType>("vercel")
+  const [typeIndex, setTypeIndex] = createSignal(0)
+  const [step, setStep] = createSignal<AddStep>("type")
   const [subdomain, setSubdomain] = createSignal("")
-  const [step, setStep] = createSignal<"subdomain" | "loading" | "project" | "adding" | "done">("subdomain")
   const [addedDomain, setAddedDomain] = createSignal("")
+  const [ipAddress, setIpAddress] = createSignal("")
+  const [cnameTarget, setCnameTarget] = createSignal("")
   const [projects, setProjects] = createSignal<VercelProject[]>([])
   const [filter, setFilter] = createSignal("")
   const [projectIndex, setProjectIndex] = createSignal(0)
@@ -189,6 +209,42 @@ function AddDomainForm(props: {
     }
   }
 
+  async function handleAddVercel(projectName: string) {
+    setStep("adding")
+    try {
+      const result = await addDomain(props.config, subdomain(), projectName)
+      setAddedDomain(result.fullDomain)
+      setStep("done")
+    } catch (err) {
+      toast.error(err)
+      setStep("project")
+    }
+  }
+
+  async function handleAddARecord() {
+    setStep("adding")
+    try {
+      const result = await addDomainARecord(props.config, subdomain(), ipAddress())
+      setAddedDomain(result.fullDomain)
+      setStep("done")
+    } catch (err) {
+      toast.error(err)
+      setStep("ip")
+    }
+  }
+
+  async function handleAddCnameTarget() {
+    setStep("adding")
+    try {
+      const result = await addDomainDNSOnly(props.config, subdomain(), cnameTarget())
+      setAddedDomain(result.fullDomain)
+      setStep("done")
+    } catch (err) {
+      toast.error(err)
+      setStep("target")
+    }
+  }
+
   useKeyboard((evt) => {
     if (step() === "adding" || step() === "loading") return
 
@@ -201,33 +257,116 @@ function AddDomainForm(props: {
       return
     }
 
-    if (evt.name === "return") {
-      evt.preventDefault()
-      if (step() === "subdomain" && subdomain().length > 0) {
-        loadProjects()
-      } else if (step() === "project" && filtered().length > 0) {
-        const selected = filtered()[projectIndex()]
-        if (selected) handleAdd(selected.name)
+    // --- Type selection step ---
+    if (step() === "type") {
+      if (evt.name === "up" || evt.name === "k") {
+        evt.preventDefault()
+        setTypeIndex((i) => (i > 0 ? i - 1 : RECORD_TYPES.length - 1))
+        setRecordType(RECORD_TYPES[typeIndex() > 0 ? typeIndex() - 1 : RECORD_TYPES.length - 1].value)
+        return
+      }
+      if (evt.name === "down" || evt.name === "j") {
+        evt.preventDefault()
+        setTypeIndex((i) => (i < RECORD_TYPES.length - 1 ? i + 1 : 0))
+        setRecordType(RECORD_TYPES[typeIndex() < RECORD_TYPES.length - 1 ? typeIndex() + 1 : 0].value)
+        return
+      }
+      if (evt.name === "return") {
+        evt.preventDefault()
+        setStep("subdomain")
+        return
+      }
+      if (evt.name === "escape") {
+        evt.preventDefault()
+        dialog.clear()
+        return
       }
       return
     }
 
-    if (evt.name === "backspace") {
-      evt.preventDefault()
-      if (step() === "subdomain") {
-        setSubdomain((v) => v.slice(0, -1))
-      } else if (step() === "project") {
+    // --- Subdomain input step ---
+    if (step() === "subdomain") {
+      if (evt.name === "return" && subdomain().length > 0) {
+        evt.preventDefault()
+        if (recordType() === "vercel") loadProjects()
+        else if (recordType() === "a") setStep("ip")
+        else if (recordType() === "cname") setStep("target")
+        return
+      }
+      if (evt.name === "backspace") {
+        evt.preventDefault()
+        if (subdomain().length === 0) setStep("type")
+        else setSubdomain((v) => v.slice(0, -1))
+        return
+      }
+      if (evt.name.length === 1 && !evt.ctrl && !evt.meta) {
+        evt.preventDefault()
+        setSubdomain((v) => v + evt.name)
+        return
+      }
+      return
+    }
+
+    // --- IP input step ---
+    if (step() === "ip") {
+      if (evt.name === "return" && ipAddress().length > 0) {
+        evt.preventDefault()
+        handleAddARecord()
+        return
+      }
+      if (evt.name === "backspace") {
+        evt.preventDefault()
+        if (ipAddress().length === 0) setStep("subdomain")
+        else setIpAddress((v) => v.slice(0, -1))
+        return
+      }
+      if (evt.name.length === 1 && !evt.ctrl && !evt.meta) {
+        evt.preventDefault()
+        setIpAddress((v) => v + evt.name)
+        return
+      }
+      return
+    }
+
+    // --- Custom CNAME target step ---
+    if (step() === "target") {
+      if (evt.name === "return" && cnameTarget().length > 0) {
+        evt.preventDefault()
+        handleAddCnameTarget()
+        return
+      }
+      if (evt.name === "backspace") {
+        evt.preventDefault()
+        if (cnameTarget().length === 0) setStep("subdomain")
+        else setCnameTarget((v) => v.slice(0, -1))
+        return
+      }
+      if (evt.name.length === 1 && !evt.ctrl && !evt.meta) {
+        evt.preventDefault()
+        setCnameTarget((v) => v + evt.name)
+        return
+      }
+      return
+    }
+
+    // --- Project selection step (Vercel) ---
+    if (step() === "project") {
+      if (evt.name === "return" && filtered().length > 0) {
+        evt.preventDefault()
+        const selected = filtered()[projectIndex()]
+        if (selected) handleAddVercel(selected.name)
+        return
+      }
+      if (evt.name === "backspace") {
+        evt.preventDefault()
         if (filter().length === 0) {
           setStep("subdomain")
         } else {
           setFilter((v) => v.slice(0, -1))
           setProjectIndex(0)
         }
+        return
       }
-      return
-    }
-
-    if (step() === "project") {
       if (evt.name === "up" || evt.name === "k") {
         evt.preventDefault()
         setProjectIndex((i) => (i > 0 ? i - 1 : Math.max(0, filtered().length - 1)))
@@ -243,30 +382,14 @@ function AddDomainForm(props: {
         setProjectIndex((i) => (i < filtered().length - 1 ? i + 1 : 0))
         return
       }
-    }
-
-    if (evt.name.length === 1 && !evt.ctrl && !evt.meta) {
-      evt.preventDefault()
-      if (step() === "subdomain") {
-        setSubdomain((v) => v + evt.name)
-      } else if (step() === "project") {
+      if (evt.name.length === 1 && !evt.ctrl && !evt.meta) {
+        evt.preventDefault()
         setFilter((v) => v + evt.name)
         setProjectIndex(0)
+        return
       }
     }
   })
-
-  async function handleAdd(projectName: string) {
-    setStep("adding")
-    try {
-      const result = await addDomain(props.config, subdomain(), projectName)
-      setAddedDomain(result.fullDomain)
-      setStep("done")
-    } catch (err) {
-      toast.error(err)
-      setStep("project")
-    }
-  }
 
   const MAX_VISIBLE = 8
 
@@ -275,17 +398,76 @@ function AddDomainForm(props: {
       <text fg={theme.text} attributes={TextAttributes.BOLD}>
         Add Domain
       </text>
-      <box flexDirection="row" gap={1}>
-        <text fg={theme.textMuted}>Subdomain:</text>
-        <text fg={step() === "subdomain" ? theme.primary : theme.text}>
-          {subdomain() || (step() === "subdomain" ? "▌" : "")}
-          {step() === "subdomain" && subdomain().length > 0 ? "▌" : ""}
-        </text>
-      </box>
+
+      {/* Type selection */}
+      <Show when={step() === "type"}>
+        <box flexDirection="column">
+          <text fg={theme.textMuted}>Record type:</text>
+          <For each={RECORD_TYPES}>
+            {(opt, index) => {
+              const isSel = () => index() === typeIndex()
+              return (
+                <box
+                  flexDirection="row"
+                  gap={1}
+                  backgroundColor={isSel() ? theme.backgroundElement : undefined}
+                  paddingLeft={1}
+                  paddingRight={1}
+                >
+                  <text fg={isSel() ? theme.primary : theme.textMuted}>
+                    {isSel() ? ">" : " "}
+                  </text>
+                  <text fg={isSel() ? theme.secondary : theme.text}>
+                    {opt.label}
+                  </text>
+                  <text fg={theme.textMuted}>{opt.desc}</text>
+                </box>
+              )
+            }}
+          </For>
+        </box>
+      </Show>
+
+      {/* Subdomain input */}
+      <Show when={step() !== "type"}>
+        <box flexDirection="row" gap={1}>
+          <text fg={theme.textMuted}>Subdomain:</text>
+          <text fg={step() === "subdomain" ? theme.primary : theme.text}>
+            {subdomain() || (step() === "subdomain" ? "▌" : "")}
+            {step() === "subdomain" && subdomain().length > 0 ? "▌" : ""}
+          </text>
+        </box>
+      </Show>
+
+      {/* IP input */}
+      <Show when={step() === "ip"}>
+        <box flexDirection="row" gap={1}>
+          <text fg={theme.textMuted}>IP address:</text>
+          <text fg={theme.primary}>
+            {ipAddress() || "▌"}
+            {ipAddress().length > 0 ? "▌" : ""}
+          </text>
+        </box>
+      </Show>
+
+      {/* Custom CNAME target input */}
+      <Show when={step() === "target"}>
+        <box flexDirection="row" gap={1}>
+          <text fg={theme.textMuted}>CNAME target:</text>
+          <text fg={theme.primary}>
+            {cnameTarget() || "▌"}
+            {cnameTarget().length > 0 ? "▌" : ""}
+          </text>
+        </box>
+      </Show>
+
+      {/* Loading projects */}
       <Show when={step() === "loading"}>
         <Spinner>Loading projects...</Spinner>
       </Show>
-      <Show when={step() === "project" || step() === "adding"}>
+
+      {/* Project selection (Vercel) */}
+      <Show when={step() === "project" || (step() === "adding" && recordType() === "vercel")}>
         <box flexDirection="column">
           <box flexDirection="row" gap={1}>
             <text fg={theme.textMuted}>Project:</text>
@@ -327,9 +509,13 @@ function AddDomainForm(props: {
           </Show>
         </box>
       </Show>
+
+      {/* Adding spinner */}
       <Show when={step() === "adding"}>
         <Spinner>Adding domain...</Spinner>
       </Show>
+
+      {/* Done */}
       <Show when={step() === "done"}>
         <box flexDirection="column" gap={1}>
           <box flexDirection="row" gap={1}>
@@ -343,15 +529,27 @@ function AddDomainForm(props: {
             https://{addedDomain()}
           </text>
           <text fg={theme.textMuted}>
-            SSL certificate may take a few minutes to provision.
+            {recordType() === "vercel"
+              ? "SSL certificate may take a few minutes to provision."
+              : recordType() === "a"
+                ? "A record created. DNS propagation may take a few minutes."
+                : "CNAME record created. DNS propagation may take a few minutes."}
           </text>
         </box>
       </Show>
+
+      {/* Help text */}
       <text fg={theme.textMuted}>
-        {step() === "subdomain"
-          ? "Enter to continue, Esc to cancel"
+        {step() === "type"
+          ? "\u2191\u2193 navigate, Enter to select, Esc to cancel"
+          : step() === "subdomain"
+          ? "Enter to continue, Backspace to go back"
+          : step() === "ip"
+          ? "Enter IP address, Enter to confirm, Backspace to go back"
+          : step() === "target"
+          ? "Enter CNAME target, Enter to confirm, Backspace to go back"
           : step() === "project"
-          ? "Type to filter, ↑↓ navigate, Enter to select"
+          ? "Type to filter, \u2191\u2193 navigate, Enter to select"
           : step() === "done"
           ? "Press Enter or Esc to close"
           : ""}
@@ -361,7 +559,7 @@ function AddDomainForm(props: {
 }
 
 function ConfirmRemove(props: {
-  subdomain: string
+  record: DomainRecord
   baseDomain: string
   config: ResolvedConfig
   onDone: () => void
@@ -395,10 +593,10 @@ function ConfirmRemove(props: {
   async function handleRemove() {
     setRemoving(true)
     try {
-      await removeDomain(props.config, props.subdomain, "")
+      await removeDomainDNSOnly(props.config, props.record.name, props.record)
       toast.show({
         variant: "success",
-        message: `${props.subdomain}.${props.baseDomain} removed`,
+        message: `${props.record.name}.${props.baseDomain} removed`,
       })
       dialog.clear()
       props.onDone()
@@ -414,7 +612,7 @@ function ConfirmRemove(props: {
         Remove Domain
       </text>
       <text fg={theme.text}>
-        Remove {props.subdomain}.{props.baseDomain}?
+        Remove {props.record.name}.{props.baseDomain}? ({props.record.type} record)
       </text>
       <Show
         when={!removing()}

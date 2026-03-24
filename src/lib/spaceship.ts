@@ -43,6 +43,36 @@ export function createSpaceshipClient(config: SpaceshipConfig) {
     return { success: true, subdomain, target };
   }
 
+  async function addA(subdomain: string, address: string) {
+    const response = await fetch(
+      `${SPACESHIP_API_URL}/dns/records/${config.baseDomain}`,
+      {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          force: true,
+          items: [
+            {
+              type: "A",
+              name: subdomain,
+              address,
+              ttl: 3600,
+            },
+          ],
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(
+        `Spaceship API error: ${response.status} - ${JSON.stringify(error)}`
+      );
+    }
+
+    return { success: true, subdomain, address };
+  }
+
   async function removeCNAME(subdomain: string, target = "cname.vercel-dns.com") {
     const response = await fetch(
       `${SPACESHIP_API_URL}/dns/records/${config.baseDomain}`,
@@ -54,6 +84,32 @@ export function createSpaceshipClient(config: SpaceshipConfig) {
             type: "CNAME",
             name: subdomain,
             cname: target,
+          },
+        ]),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(
+        `Spaceship API error: ${response.status} - ${JSON.stringify(error)}`
+      );
+    }
+
+    return { success: true, subdomain };
+  }
+
+  async function removeA(subdomain: string, address: string) {
+    const response = await fetch(
+      `${SPACESHIP_API_URL}/dns/records/${config.baseDomain}`,
+      {
+        method: "DELETE",
+        headers,
+        body: JSON.stringify([
+          {
+            type: "A",
+            name: subdomain,
+            address,
           },
         ]),
       }
@@ -86,7 +142,7 @@ export function createSpaceshipClient(config: SpaceshipConfig) {
     }
 
     return response.json() as Promise<{
-      items: Array<{ type: string; name: string; cname?: string; ttl: number }>;
+      items: Array<{ type: string; name: string; cname?: string; address?: string; ttl: number }>;
       total: number;
     }>;
   }
@@ -94,6 +150,8 @@ export function createSpaceshipClient(config: SpaceshipConfig) {
   return {
     addCNAME,
     removeCNAME,
+    addA,
+    removeA,
     listRecords,
   };
 }

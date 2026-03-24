@@ -36,6 +36,10 @@ export const domainAdd = defineCommand({
       alias: "t",
       description: "Custom CNAME target (DNS-only, skips Vercel)",
     },
+    ip: {
+      type: "string",
+      description: "IP address for A record (DNS-only, e.g., VPS)",
+    },
     "clerk-key": {
       type: "string",
       description:
@@ -64,6 +68,21 @@ export const domainAdd = defineCommand({
       s.stop(`CNAME: ${pc.dim(args.target)}`)
 
       p.outro(`${pc.green(fullDomain)} -> ${pc.dim(args.target)}`)
+      return
+    }
+
+    // --- A record mode: just DNS ---
+    if (args.ip) {
+      p.log.info(`Domain: ${pc.cyan(fullDomain)}`)
+      p.log.info(`IP:     ${pc.cyan(args.ip)}`)
+
+      const s = p.spinner()
+      s.start("Creating A record")
+      const { addDomainARecord } = await import("../lib/domain-ops")
+      await addDomainARecord(config, subdomain, args.ip)
+      s.stop(`A record: ${pc.dim(args.ip)}`)
+
+      p.outro(`${pc.green(fullDomain)} -> ${pc.dim(args.ip)} (A record)`)
       return
     }
 
@@ -125,7 +144,7 @@ export const domainAdd = defineCommand({
 export const domainRemove = defineCommand({
   meta: {
     name: "remove",
-    description: "Remove a subdomain from a Vercel project",
+    description: "Remove a subdomain from DNS (and optionally Vercel)",
   },
   args: {
     subdomain: {
@@ -136,8 +155,12 @@ export const domainRemove = defineCommand({
     project: {
       type: "string",
       alias: "p",
-      description: "Vercel project slug",
-      required: true,
+      description: "Vercel project slug (required for Vercel-managed domains)",
+    },
+    "dns-only": {
+      type: "boolean",
+      description: "Remove DNS record only (no Vercel). Required for A records.",
+      default: false,
     },
   },
   async run({ args }) {
@@ -147,12 +170,31 @@ export const domainRemove = defineCommand({
     const fullDomain = `${args.subdomain}.${config.baseDomain}`
 
     p.log.info(`Domain: ${pc.cyan(fullDomain)}`)
-    p.log.info(`Project: ${pc.cyan(args.project)}`)
 
     const s = p.spinner()
-    s.start("Removing domain from Vercel and DNS")
-    await removeDomain(config, args.subdomain, args.project)
-    s.stop("Domain and DNS records removed")
+
+    if (args["dns-only"] || !args.project) {
+      s.start("Looking up DNS record")
+      const { records } = await listDomains(config)
+      const record = records.find((r) => r.name === args.subdomain)
+      if (!record) {
+        s.stop("Record not found")
+        p.outro(pc.yellow(`No DNS record found for ${args.subdomain}`))
+        return
+      }
+      s.stop(`Found ${record.type} record`)
+
+      const s2 = p.spinner()
+      s2.start("Removing DNS record")
+      const { removeDomainDNSOnly } = await import("../lib/domain-ops")
+      await removeDomainDNSOnly(config, args.subdomain, record)
+      s2.stop("DNS record removed")
+    } else {
+      p.log.info(`Project: ${pc.cyan(args.project)}`)
+      s.start("Removing domain from Vercel and DNS")
+      await removeDomain(config, args.subdomain, args.project)
+      s.stop("Domain and DNS records removed")
+    }
 
     p.outro(`${pc.yellow(fullDomain)} has been removed.`)
   },
@@ -171,14 +213,16 @@ export const domainList = defineCommand({
     const s = p.spinner()
     s.start("Fetching DNS records")
     const { records, baseDomain } = await listDomains(config)
-    s.stop(`Found ${records.length} CNAME record(s)`)
+    s.stop(`Found ${records.length} record(s)`)
 
     if (records.length === 0) {
-      p.log.warning("No CNAME records found.")
+      p.log.warning("No DNS records found.")
     } else {
       for (const record of records) {
+        const target = record.type === "A" ? record.address : record.cname
+        const typeLabel = record.type === "A" ? pc.yellow("A    ") : pc.blue("CNAME")
         p.log.info(
-          `${pc.cyan(record.name + "." + baseDomain)} ${pc.dim("->")} ${pc.dim(record.cname ?? "")}`
+          `${typeLabel} ${pc.cyan(record.name + "." + baseDomain)} ${pc.dim("->")} ${pc.dim(target ?? "")}`
         )
       }
     }
