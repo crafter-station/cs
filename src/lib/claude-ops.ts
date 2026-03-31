@@ -150,13 +150,37 @@ export interface InstallResult {
   skills: string[]
 }
 
+async function copyLocalSkills(): Promise<string[]> {
+  const srcDir = join(import.meta.dir, "../../.claude/skills")
+  const destDir = join(CLAUDE_CONFIG_PATH, "skills")
+
+  if (!(await exists(srcDir))) return []
+
+  await mkdir(destDir, { recursive: true })
+
+  const entries = await readdir(srcDir, { withFileTypes: true })
+  const skills: string[] = []
+
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      const srcPath = join(srcDir, entry.name)
+      const destPath = join(destDir, entry.name)
+      await cp(srcPath, destPath, { recursive: true })
+      skills.push(entry.name)
+    }
+  }
+  return skills
+}
+
 export async function installClaudeDx(
   force: boolean
 ): Promise<InstallResult> {
   const repoAction = await cloneOrPullRepo()
   const commands = await copyCommands(force)
   const agents = await copyAgents()
-  const skills = await copySkills()
+  const dxSkills = await copySkills()
+  const localSkills = await copyLocalSkills()
+  const skills = [...new Set([...dxSkills, ...localSkills])]
   await mergeSettings()
 
   return { repoAction, commands, agents, skills }

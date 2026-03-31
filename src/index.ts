@@ -6,36 +6,50 @@ import { clerk } from "./commands/clerk";
 import { domain } from "./commands/domain";
 import { login, logout, whoami } from "./commands/login";
 import { projects } from "./commands/projects";
+import { schema } from "./commands/schema";
 
-const subCommands = {
-  agent,
-  claude,
-  clerk,
-  domain,
-  projects,
-  login,
-  logout,
-  whoami,
-};
+const mcp = defineCommand({
+  meta: {
+    name: "mcp",
+    description: "Start MCP server over stdio (for AI agents)",
+  },
+  async run() {
+    const { startMcpServer } = await import("./mcp/server");
+    await startMcpServer();
+  },
+});
 
-const hasSubCommand = process.argv
-  .slice(2)
-  .some((arg) => !arg.startsWith("-") && arg in subCommands);
+const tui = defineCommand({
+  meta: {
+    name: "tui",
+    description: "Launch interactive terminal UI",
+  },
+  async run() {
+    const { launchTUI } = await import("./tui/app");
+    await launchTUI();
+  },
+});
 
 const main = defineCommand({
   meta: {
     name: "crafters",
-    version: "0.3.1",
+    version: "0.4.0",
     description:
-      "Crafter Station CLI - Domain management and Claude Code configuration",
+      "Crafter Station CLI - Domain management, agent infrastructure, and Claude Code configuration",
   },
-  subCommands,
-  ...(!hasSubCommand && {
-    async run() {
-      const { launchTUI } = await import("./tui/app");
-      await launchTUI();
-    },
-  }),
+  subCommands: {
+    agent,
+    claude,
+    clerk,
+    domain,
+    projects,
+    login,
+    logout,
+    whoami,
+    schema,
+    mcp,
+    tui,
+  },
 });
 
 runMain(main);

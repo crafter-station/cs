@@ -1,7 +1,8 @@
 import { defineCommand } from "citty"
-import * as p from "@clack/prompts"
 import pc from "picocolors"
 import { installClaudeDx } from "../lib/claude-ops"
+import { globalArgs } from "../lib/common-args"
+import { createOutput } from "../lib/output"
 
 export const claudeInstall = defineCommand({
   meta: {
@@ -10,6 +11,7 @@ export const claudeInstall = defineCommand({
       "Install Claude Code commands, agents, and skills from claude-dx",
   },
   args: {
+    json: globalArgs.json,
     force: {
       type: "boolean",
       alias: "f",
@@ -18,10 +20,11 @@ export const claudeInstall = defineCommand({
     },
   },
   async run({ args }) {
-    p.intro(pc.bgMagenta(pc.black(" Claude Code Configuration ")))
+    const out = createOutput({ json: args.json })
 
-    const s = p.spinner()
+    out.intro(pc.bgMagenta(pc.black(" Claude Code Configuration ")))
 
+    const s = out.spinner()
     s.start("Syncing claude-dx repo")
     const result = await installClaudeDx(args.force)
     s.stop(
@@ -29,22 +32,22 @@ export const claudeInstall = defineCommand({
     )
 
     if (result.commands.copied.length > 0) {
-      p.log.success(
+      out.success(
         `Commands installed: ${pc.cyan(result.commands.copied.join(", "))}`
       )
     }
     if (result.commands.skipped.length > 0) {
-      p.log.warning(
+      out.warn(
         `Commands skipped: ${pc.dim(result.commands.skipped.join(", "))}`
       )
     }
     if (result.agents.length > 0) {
-      p.log.success(
+      out.success(
         `Agents installed: ${pc.cyan(result.agents.join(", "))}`
       )
     }
     if (result.skills.length > 0) {
-      p.log.success(
+      out.success(
         `Skills installed: ${pc.cyan(result.skills.join(", "))}`
       )
     }
@@ -55,7 +58,14 @@ export const claudeInstall = defineCommand({
       `${result.skills.length} skills`,
     ].join(", ")
 
-    p.outro(
+    out.result({
+      repoAction: result.repoAction,
+      commands: result.commands,
+      agents: result.agents,
+      skills: result.skills,
+    })
+
+    out.outro(
       result.commands.skipped.length > 0 && !args.force
         ? `${summary} installed. Use ${pc.cyan("crafters claude update")} to overwrite skipped.`
         : `${summary} installed.`
@@ -69,19 +79,30 @@ export const claudeUpdate = defineCommand({
     description:
       "Update Claude Code commands, agents, and skills from claude-dx",
   },
-  async run() {
-    p.intro(pc.bgMagenta(pc.black(" Claude Code Update ")))
+  args: {
+    json: globalArgs.json,
+  },
+  async run({ args }) {
+    const out = createOutput({ json: args.json })
 
-    const s = p.spinner()
+    out.intro(pc.bgMagenta(pc.black(" Claude Code Update ")))
+
+    const s = out.spinner()
     s.start("Syncing and updating all configs")
     const result = await installClaudeDx(true)
     s.stop("All configs updated")
 
-    p.log.success(
+    out.success(
       `${result.commands.copied.length} commands, ${result.agents.length} agents, ${result.skills.length} skills`
     )
 
-    p.outro("Claude Code configuration updated.")
+    out.result({
+      commands: result.commands,
+      agents: result.agents,
+      skills: result.skills,
+    })
+
+    out.outro("Claude Code configuration updated.")
   },
 })
 

@@ -14,6 +14,7 @@ export interface CraftersConfig {
     teamId?: string;
   };
   baseDomain: string;
+  domains?: string[];
   sites?: {
     [domain: string]: {
       repo: string;

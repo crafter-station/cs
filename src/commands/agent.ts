@@ -16,6 +16,8 @@ import {
   refreshLinearTokens,
 } from "../lib/agent-ops";
 import { installClaudeDx } from "../lib/claude-ops";
+import { globalArgs } from "../lib/common-args";
+import { createOutput, outputError } from "../lib/output";
 
 const PILLAR_COLORS: Record<string, (s: string) => string> = {
   engineering: pc.blue,
@@ -34,15 +36,20 @@ export const agentList = defineCommand({
     name: "list",
     description: "List all installed agents",
   },
-  async run() {
+  args: {
+    json: globalArgs.json,
+  },
+  async run({ args }) {
+    const out = createOutput({ json: args.json });
     const agents = listAgents();
 
     if (agents.length === 0) {
-      p.log.warning('No agents found. Run "crafters claude update" to sync agents.');
+      out.warn('No agents found. Run "crafters claude update" to sync agents.');
+      out.result({ agents: [], total: 0 });
       return;
     }
 
-    p.intro(pc.bgCyan(pc.black(" Kai Agent Team ")));
+    out.intro(pc.bgCyan(pc.black(" Kai Agent Team ")));
 
     const maxName = Math.max(...agents.map((a) => a.name.length));
     const maxPillar = Math.max(...agents.map((a) => a.pillar.length));
@@ -54,12 +61,13 @@ export const agentList = defineCommand({
       const model = agent.model;
       const gh = agent.github ? pc.green("GH") : pc.dim("--");
 
-      p.log.info(
+      out.info(
         `${pc.bold(name)}  ${colorFn(pillar)}  ${pc.dim(model)}  ${gh}  ${pc.dim(agent.description.slice(0, 60))}`
       );
     }
 
-    p.outro(`${agents.length} agents installed`);
+    out.result({ agents, total: agents.length });
+    out.outro(`${agents.length} agents installed`);
   },
 });
 
@@ -69,6 +77,7 @@ export const agentInfo = defineCommand({
     description: "Show detailed info about an agent",
   },
   args: {
+    json: globalArgs.json,
     name: {
       type: "positional",
       description: "Agent name",
@@ -76,26 +85,28 @@ export const agentInfo = defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json });
     const agent = getAgentInfo(args.name);
 
     if (!agent) {
-      p.log.error(`Agent "${args.name}" not found`);
+      outputError(!!args.json, "AGENT_NOT_FOUND", `Agent "${args.name}" not found`);
       return;
     }
 
-    p.intro(pc.bgCyan(pc.black(` ${agent.displayName} `)));
+    out.intro(pc.bgCyan(pc.black(` ${agent.displayName} `)));
 
-    p.log.info(`${pc.bold("Name:")}       ${agent.name}`);
-    p.log.info(`${pc.bold("Pillar:")}     ${agent.pillar}`);
-    p.log.info(`${pc.bold("Model:")}      ${agent.model}`);
-    p.log.info(`${pc.bold("GitHub:")}     ${agent.github ? "Yes" : "No"}`);
-    p.log.info(`${pc.bold("Description:")} ${agent.description}`);
+    out.info(`${pc.bold("Name:")}       ${agent.name}`);
+    out.info(`${pc.bold("Pillar:")}     ${agent.pillar}`);
+    out.info(`${pc.bold("Model:")}      ${agent.model}`);
+    out.info(`${pc.bold("GitHub:")}     ${agent.github ? "Yes" : "No"}`);
+    out.info(`${pc.bold("Description:")} ${agent.description}`);
 
     if (agent.keywords.length > 0) {
-      p.log.info(`${pc.bold("Keywords:")}   ${agent.keywords.join(", ")}`);
+      out.info(`${pc.bold("Keywords:")}   ${agent.keywords.join(", ")}`);
     }
 
-    p.outro("");
+    out.result(agent);
+    out.outro("");
   },
 });
 
@@ -224,27 +235,39 @@ export const agentStatus = defineCommand({
     name: "status",
     description: "Show executor daemon status",
   },
-  async run() {
-    p.intro(pc.bgCyan(pc.black(" Executor Status ")));
+  args: {
+    json: globalArgs.json,
+  },
+  async run({ args }) {
+    const out = createOutput({ json: args.json });
 
     const config = getExecutorConfig();
     if (!config) {
-      p.log.warning('Executor not configured. Run "crafters agent setup" first.');
-      p.outro("");
+      outputError(!!args.json, "NOT_CONFIGURED", 'Executor not configured. Run "crafters agent setup" first.');
       return;
     }
 
-    p.log.info(`${pc.bold("Member:")}  ${config.memberId}`);
-    p.log.info(`${pc.bold("Central:")} ${config.centralUrl}`);
-    p.log.info(`${pc.bold("Workdir:")} ${config.workspacesRoot}`);
+    out.intro(pc.bgCyan(pc.black(" Executor Status ")));
+
+    out.info(`${pc.bold("Member:")}  ${config.memberId}`);
+    out.info(`${pc.bold("Central:")} ${config.centralUrl}`);
+    out.info(`${pc.bold("Workdir:")} ${config.workspacesRoot}`);
 
     const daemonInstalled = isLaunchdInstalled();
-    p.log.info(`${pc.bold("Daemon:")}  ${daemonInstalled ? pc.green("installed") : pc.dim("not installed")}`);
+    out.info(`${pc.bold("Daemon:")}  ${daemonInstalled ? pc.green("installed") : pc.dim("not installed")}`);
 
     const agents = listAgents();
-    p.log.info(`${pc.bold("Agents:")}  ${agents.length} loaded`);
+    out.info(`${pc.bold("Agents:")}  ${agents.length} loaded`);
 
-    p.outro("");
+    out.result({
+      memberId: config.memberId,
+      centralUrl: config.centralUrl,
+      workspacesRoot: config.workspacesRoot,
+      daemonInstalled,
+      agentCount: agents.length,
+    });
+
+    out.outro("");
   },
 });
 
@@ -254,6 +277,7 @@ export const agentDoctor = defineCommand({
     description: "Diagnose executor health and auto-fix issues",
   },
   args: {
+    json: globalArgs.json,
     fix: {
       type: "boolean",
       description: "Auto-fix fixable issues",
@@ -261,7 +285,9 @@ export const agentDoctor = defineCommand({
     },
   },
   async run({ args }) {
-    p.intro(pc.bgCyan(pc.black(" Kai Doctor ")));
+    const out = createOutput({ json: args.json });
+
+    out.intro(pc.bgCyan(pc.black(" Kai Doctor ")));
 
     const checks = runDoctorChecks();
     let issues = 0;
@@ -272,29 +298,35 @@ export const agentDoctor = defineCommand({
 
     for (const check of checks) {
       const detail = check.detail ? pc.dim(` ${check.detail}`) : "";
-      p.log.info(`${icon(check.status)} ${pc.bold(check.label)}${detail}`);
+      out.info(`${icon(check.status)} ${pc.bold(check.label)}${detail}`);
 
       if (check.status === "fail") {
         issues++;
         if (args.fix && check.fix) {
           check.fix();
           fixed++;
-          p.log.info(`  ${pc.cyan("↻")} fixed`);
+          out.info(`  ${pc.cyan("↻")} fixed`);
         }
       }
     }
 
+    out.result({
+      checks: checks.map((c) => ({ label: c.label, status: c.status, detail: c.detail })),
+      issues,
+      fixed,
+    });
+
     if (issues === 0) {
-      p.outro(pc.green("All checks passed"));
+      out.outro(pc.green("All checks passed"));
     } else if (args.fix && fixed > 0) {
       const remaining = issues - fixed;
-      p.outro(
+      out.outro(
         remaining > 0
           ? `${pc.cyan(`Fixed ${fixed} issue(s).`)} ${pc.yellow(`${remaining} remaining.`)}`
           : pc.green(`Fixed ${fixed} issue(s).`)
       );
     } else {
-      p.outro(`${pc.red(`${issues} issue(s) found.`)} Run with ${pc.cyan("--fix")} to auto-heal.`);
+      out.outro(`${pc.red(`${issues} issue(s) found.`)} Run with ${pc.cyan("--fix")} to auto-heal.`);
     }
   },
 });

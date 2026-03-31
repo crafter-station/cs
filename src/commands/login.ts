@@ -1,7 +1,8 @@
 import { defineCommand } from "citty"
-import * as p from "@clack/prompts"
 import pc from "picocolors"
 import { saveConfig, loadConfig, getConfigPath } from "../lib/config"
+import { globalArgs } from "../lib/common-args"
+import { createOutput, outputError } from "../lib/output"
 
 export const login = defineCommand({
   meta: {
@@ -9,6 +10,7 @@ export const login = defineCommand({
     description: "Configure credentials for Spaceship and Vercel",
   },
   args: {
+    ...globalArgs,
     spaceshipKey: {
       type: "string",
       description: "Spaceship API Key",
@@ -30,16 +32,26 @@ export const login = defineCommand({
     },
     baseDomain: {
       type: "string",
-      description: "Base domain (default: crafter.run)",
+      description: "Default base domain (default: crafter.run)",
       default: "crafter.run",
     },
     clerkPlatformToken: {
       type: "string",
       description: "Clerk Platform API token",
     },
+    domains: {
+      type: "string",
+      description: "Comma-separated list of all managed domains (e.g., crafter.run,crafter.ing)",
+    },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json })
     const existing = await loadConfig()
+
+    const domainsList = args.domains
+      ? args.domains.split(",").map((d: string) => d.trim())
+      : existing?.domains
+
     await saveConfig({
       spaceship: {
         apiKey: args.spaceshipKey,
@@ -50,13 +62,15 @@ export const login = defineCommand({
         teamId: args.vercelTeamId,
       },
       baseDomain: args.baseDomain,
+      domains: domainsList,
       sites: existing?.sites,
       clerk: args.clerkPlatformToken
         ? { platformToken: args.clerkPlatformToken }
         : existing?.clerk,
     })
 
-    p.log.success(`Credentials saved to ${pc.dim(getConfigPath())}`)
+    out.result({ configPath: getConfigPath(), baseDomain: args.baseDomain, domains: domainsList })
+    out.success(`Credentials saved to ${pc.dim(getConfigPath())}`)
   },
 })
 
@@ -65,15 +79,21 @@ export const logout = defineCommand({
     name: "logout",
     description: "Remove stored credentials",
   },
-  async run() {
+  args: {
+    json: globalArgs.json,
+  },
+  async run({ args }) {
+    const out = createOutput({ json: args.json })
     const fs = await import("fs/promises")
     const configPath = getConfigPath()
 
     try {
       await fs.unlink(configPath)
-      p.log.success("Credentials removed.")
+      out.result({ removed: true })
+      out.success("Credentials removed.")
     } catch {
-      p.log.warning("No credentials found.")
+      out.result({ removed: false })
+      out.warn("No credentials found.")
     }
   },
 })
@@ -83,32 +103,51 @@ export const whoami = defineCommand({
     name: "whoami",
     description: "Show current configuration",
   },
-  async run() {
+  args: {
+    json: globalArgs.json,
+  },
+  async run({ args }) {
+    const out = createOutput({ json: args.json })
     const config = await loadConfig()
 
     if (!config) {
-      p.log.warning(`Not logged in. Run ${pc.cyan("crafters login")} first.`)
+      outputError(!!args.json, "NOT_LOGGED_IN", "Not logged in. Run crafters login first.")
       return
     }
 
-    p.intro(pc.bgCyan(pc.black(" Current Configuration ")))
+    out.intro(pc.bgCyan(pc.black(" Current Configuration ")))
 
-    p.log.info(`Base Domain:     ${pc.cyan(config.baseDomain)}`)
-    p.log.info(
+    out.info(`Base Domain:     ${pc.cyan(config.baseDomain)}`)
+    if (config.domains?.length) {
+      out.info(`All Domains:     ${pc.cyan(config.domains.join(", "))}`)
+    }
+    out.info(
       `Spaceship Key:   ${pc.dim(config.spaceship.apiKey.slice(0, 8) + "...")}`
     )
-    p.log.info(
+    out.info(
       `Vercel Token:    ${pc.dim(config.vercel.token.slice(0, 8) + "...")}`
     )
     if (config.vercel.teamId) {
-      p.log.info(`Vercel Team ID:  ${pc.dim(config.vercel.teamId)}`)
+      out.info(`Vercel Team ID:  ${pc.dim(config.vercel.teamId)}`)
     }
     if (config.clerk?.platformToken) {
-      p.log.info(
+      out.info(
         `Clerk Platform:  ${pc.dim(config.clerk.platformToken.slice(0, 8) + "...")}`
       )
     }
 
-    p.outro(`Config: ${pc.dim(getConfigPath())}`)
+    out.result({
+      baseDomain: config.baseDomain,
+      domains: config.domains,
+      spaceship: { apiKey: config.spaceship.apiKey.slice(0, 8) + "..." },
+      vercel: {
+        token: config.vercel.token.slice(0, 8) + "...",
+        teamId: config.vercel.teamId,
+      },
+      clerk: config.clerk ? { platformToken: config.clerk.platformToken.slice(0, 8) + "..." } : undefined,
+      configPath: getConfigPath(),
+    })
+
+    out.outro(`Config: ${pc.dim(getConfigPath())}`)
   },
 })

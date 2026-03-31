@@ -13,14 +13,14 @@ export interface ResolvedConfig {
   clerkPlatformToken?: string
 }
 
-export async function resolveConfig(): Promise<ResolvedConfig> {
+export async function resolveConfig(opts?: { domain?: string }): Promise<ResolvedConfig> {
   const fileConfig = await loadConfig()
 
   const apiKey = process.env.SPACESHIP_API_KEY || fileConfig?.spaceship.apiKey
   const apiSecret =
     process.env.SPACESHIP_API_SECRET || fileConfig?.spaceship.apiSecret
   const baseDomain =
-    process.env.BASE_DOMAIN || fileConfig?.baseDomain || "crafter.run"
+    opts?.domain || process.env.BASE_DOMAIN || fileConfig?.baseDomain || "crafter.run"
   const vercelToken = process.env.VERCEL_TOKEN || fileConfig?.vercel.token
   const vercelTeamId = process.env.VERCEL_TEAM_ID || fileConfig?.vercel.teamId
   const clerkPlatformToken = process.env.CLERK_PLATFORM_TOKEN || fileConfig?.clerk?.platformToken
